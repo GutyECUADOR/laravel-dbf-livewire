@@ -9,6 +9,14 @@
             </div>
         @endif
 
+        @if (session()->has('success'))
+            <div class="bg-green-50 border-l-4 border-green-400 p-4 rounded shadow-sm">
+                <div class="flex">
+                    <div class="text-green-700 text-sm">{{ session('success') }}</div>
+                </div>
+            </div>
+        @endif
+
         <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             <h2 class="text-xl font-bold text-gray-800 mb-4">Cargar Archivo DBF</h2>
             
@@ -25,6 +33,13 @@
                     </svg>
                     <span>Leyendo tablas con XBase...</span>
                 </div>
+
+                @if($recordCount > 0) 
+                    <button wire:click="import" wire:loading.attr="disabled" class="bg-red-600 hover:bg-blue-800 text-white px-6 py-2 rounded-lg font-bold transition flex items-center">
+                        <span wire:loading.remove wire:target="import">Confirmar e Importar {{ $recordCount }} registros</span>
+                        <span wire:loading wire:target="import">Procesando base de datos...</span>
+                    </button>
+                @endif
             </div>
         </div>
 

@@ -1,9 +1,13 @@
 <?php
 
 namespace App\Livewire;
+
+use Illuminate\Support\Facades\DB;
 use Livewire\WithFileUploads;
 use XBase\TableReader;
 use Livewire\Component;
+use App\Models\Articulo;
+use Carbon\Carbon;
 
 class LoadDbfs extends Component
 {
@@ -12,6 +16,7 @@ class LoadDbfs extends Component
     public $headers = [];
     public $rows = [];
     public $recordCount = 0;
+    public $tempPath;
 
     protected $rules = [
         'dbfFile' => 'required|mimes:dbf,bin|max:10240', // A veces el MIME se detecta como bin
@@ -27,15 +32,14 @@ class LoadDbfs extends Component
 
         try {
             // Obtener la ruta del archivo temporal
-            $filePath = $this->dbfFile->getRealPath();
+            $this->tempPath = $this->dbfFile->getRealPath();
 
             // 1. Instanciar el TableReader
-            $table = new TableReader($filePath);
+            $table = new TableReader($this->tempPath);
             
             $this->recordCount = $table->getRecordCount();
 
             // 2. Extraer los nombres de las columnas
-            $this->headers = [];
             foreach ($table->getColumns() as $column) {
                 $this->headers[] = $column->getName();
             }
@@ -66,6 +70,56 @@ class LoadDbfs extends Component
         } catch (\Exception $e) {
             session()->flash('error', 'Error al procesar el archivo DBF: ' . $e->getMessage());
             $this->rows = [];
+        }
+    }
+
+    public function import()
+    {
+        if (!$this->tempPath || !file_exists($this->tempPath)) {
+            session()->flash('error', 'El archivo ya no está disponible. Por favor, súbelo de nuevo.');
+            return;
+        }
+
+        try {
+            $table = new TableReader($this->tempPath);
+            
+            DB::transaction(function () use ($table) {
+                while ($record = $table->nextRecord()) {
+                    Articulo::updateOrCreate(
+                        ['codart' => trim($record->get('CODART'))], // Busca por código para no duplicar
+                        [
+                            'nomart'     => trim(utf8_encode($record->get('NOMART'))),
+                            'grupo'      => trim($record->get('GRUPO')),
+                            'alterno'    => trim($record->get('ALTERNO')),
+                            'iva'        => trim($record->get('IVA')),
+                            'precio_a'   => $record->get('PRECIO_A') ? $record->get('PRECIO_A') * rand(110, 190) / 100 : 0,
+                            'precio_b'   => $record->get('PRECIO_B') ? $record->get('PRECIO_B') * rand(110, 190) / 100 : 0,
+                            'existe_act' => $record->get('EXISTE_ACT') ?: 0,
+                            'ult_costo'  => $record->get('ULT_COSTO') ?: 0,
+                            'fecha_cos'  => $this->parseDbfDate($record->get('FECHA_COS')),
+                            'fec_dig'    => $this->parseDbfDate($record->get('FEC_DIG')),
+                            'codbar'     => trim($record->get('CODBAR')),
+                        ]
+                    );
+                }
+            });
+
+            $table->close();
+            $this->reset(['rows', 'headers', 'dbfFile', 'recordCount']);
+            session()->flash('success', '¡Importación completada con éxito!');
+
+        } catch (\Exception $e) {
+            session()->flash('error', 'Error al importar: ' . $e->getMessage());
+        }
+    }
+
+    private function parseDbfDate($value)
+    {
+        if (!$value || $value == '00000000') return null;
+        try {
+            return Carbon::parse($value)->format('Y-m-d');
+        } catch (\Exception $e) {
+            return null;
         }
     }
 }
