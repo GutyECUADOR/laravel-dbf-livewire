@@ -15,7 +15,7 @@ class Kernel extends ConsoleKernel
     {
         // $schedule->command('inspire')->hourly();
         // Ejecutar el Job cada hora
-        Schedule::job(new UpdateInventoryDbf)->hourly();
+        $schedule->job(new UpdateInventoryDbf)->everyMinute();
     }
 
     /**
