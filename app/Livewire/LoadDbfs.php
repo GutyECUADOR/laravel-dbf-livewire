@@ -7,6 +7,7 @@ use Livewire\WithFileUploads;
 use XBase\TableReader;
 use Livewire\Component;
 use App\Models\Articulo;
+use App\Services\DbfService;
 use Carbon\Carbon;
 use XBase\TableEditor;
 
@@ -124,7 +125,7 @@ class LoadDbfs extends Component
         }
     }
 
-    public function updateDbfFromDatabase()
+    public function updateDbfFromDatabase(DbfService $dbfService)
     {
         if (!$this->tempPath || !file_exists($this->tempPath)) {
             session()->flash('error', 'Cargue el archivo DBF primero.');
@@ -132,42 +133,13 @@ class LoadDbfs extends Component
         }
 
         // Definimos la ruta de destino en el disco D:
-        $destinationPath = 'D:\\MXCTAINV_ACTUALIZADO.DBF';
+        /* $destinationPath = 'D:\\MXCTAINV_ACTUALIZADO.DBF'; */
 
         try {
-            // Copiamos el archivo temporal a la ruta final para trabajar sobre él
-            copy($this->tempPath, $destinationPath);
+            // Aquí SÍ pasamos el path temporal como origen, pero usamos el destino del .env
+            $count = $dbfService->syncSqlToDbf($this->tempPath);
 
-            // Abrimos el archivo en modo Edición
-            $table = new TableEditor($destinationPath, [
-                'editMode' => TableEditor::EDIT_MODE_REALTIME // Edita el archivo original
-            ]);
-
-            $updatedCount = 0;
-
-            // Recorremos el DBF registro por registro
-            while ($record = $table->nextRecord()) {
-                $codart = trim($record->get('CODART'));
-
-                // Buscamos el artículo en nuestra base de datos SQL
-                $articuloSql = Articulo::where('codart', $codart)->first();
-
-                if ($articuloSql) {
-                    // Actualizamos los campos del registro en el DBF
-                    // Nota: Asegúrate de que los nombres coincidan con el DBF (Mayúsculas)
-                    $record->set('PRECIO_A', $articuloSql->precio_a);
-                    $record->set('PRECIO_B', $articuloSql->precio_b);
-                    $record->set('EXISTE_ACT', $articuloSql->existe_act);
-                    
-                    // Guardamos los cambios de este registro específico
-                    $table->writeRecord();
-                    $updatedCount++;
-                }
-            }
-
-            $table->save()->close();
-
-            session()->flash('success', "Se han actualizado $updatedCount registros dentro del archivo DBF.");
+            session()->flash('success', "Se han actualizado $count registros dentro del archivo DBF.");
             
             // Forzamos la recarga de la previsualización
             $this->updatedDbfFile();
